@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const [isDemoUser, setIsDemoUser] = useState<boolean>(false);
 
-  // Sync profile & reactions for a given UID
+  // Sync profile & reactions across all devices using Firestore
   const syncUserData = useCallback(async (user: User | null) => {
     if (!user) {
       setUserProfile(null);
@@ -81,7 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Check local cache backup first
+      // Check local cache for immediate render
       const localProfileRaw = localStorage.getItem(`nextwatch_profile_${user.uid}`);
       const localReactionsRaw = localStorage.getItem(`nextwatch_reactions_${user.uid}`);
       const localProfile: UserProfile | null = localProfileRaw ? JSON.parse(localProfileRaw) : null;
@@ -89,13 +89,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? JSON.parse(localReactionsRaw)
         : {};
 
-      // If user has local onboarding completed, respect it immediately
-      if (localProfile?.onboardingCompleted) {
+      if (localProfile) {
         setUserProfile(localProfile);
         setReactions(localReactions);
       }
 
-      // Live Firestore sync with timeout
+      // Live Firestore sync across devices (Cloud Firestore is source of truth)
       const [remoteProfile, remoteReactions] = await Promise.all([
         getUserProfile(user.uid),
         getUserReactions(user.uid),
@@ -105,6 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile(remoteProfile);
         localStorage.setItem(`nextwatch_profile_${user.uid}`, JSON.stringify(remoteProfile));
       } else if (!localProfile) {
+        // Brand new account on all devices
         setUserProfile({
           uid: user.uid,
           email: user.email,
@@ -115,13 +115,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
 
-      if (Object.keys(remoteReactions).length > 0) {
-        const mergedReactions = { ...localReactions, ...remoteReactions };
-        setReactions(mergedReactions);
-        localStorage.setItem(`nextwatch_reactions_${user.uid}`, JSON.stringify(mergedReactions));
+      if (remoteReactions && Object.keys(remoteReactions).length > 0) {
+        const merged = { ...localReactions, ...remoteReactions };
+        setReactions(merged);
+        localStorage.setItem(`nextwatch_reactions_${user.uid}`, JSON.stringify(merged));
       }
     } catch (err) {
-      console.warn('Error syncing user data:', err);
+      console.warn('Error syncing user data across devices:', err);
     }
   }, []);
 
@@ -161,6 +161,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [syncUserData]);
 
   const signInWithGoogle = async () => {
+    if (!isFirebaseConfigured) {
+      throw new Error('Firebase credentials are not configured in your .env file.');
+    }
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
@@ -217,16 +220,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       top5,
     };
 
-    // Always update local cache & state immediately
-    if (isDemoUser) {
-      localStorage.setItem('nextwatch_demo_profile', JSON.stringify(updatedProfile));
-    } else {
-      localStorage.setItem(`nextwatch_profile_${currentUser.uid}`, JSON.stringify(updatedProfile));
-    }
+    // Update local state & cache
+    localStorage.setItem(`nextwatch_profile_${currentUser.uid}`, JSON.stringify(updatedProfile));
     setUserProfile(updatedProfile);
 
     if (!isDemoUser) {
-      // Fire-and-forget save to Firestore with timeout
+      // Save directly to Firestore for cross-device sync
       await saveUserTop5(currentUser.uid, currentUser.email, top5, {
         displayName: currentUser.displayName,
         photoURL: currentUser.photoURL,
@@ -276,7 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Persist to Firestore in background
+    // Persist to Cloud Firestore across all devices
     await saveUserReaction(currentUser.uid, tmdbId, mediaType, reaction, metadata);
   };
 

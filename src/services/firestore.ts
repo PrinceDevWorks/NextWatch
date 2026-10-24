@@ -13,7 +13,7 @@ import type { MediaType, ReactionType, UserProfile, UserReaction } from '../type
 /**
  * Helper to race any promise against a timeout in milliseconds
  */
-function withTimeout<T>(promise: Promise<T>, ms = 4000, fallback: T): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms = 8000, fallback: T): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
@@ -21,12 +21,13 @@ function withTimeout<T>(promise: Promise<T>, ms = 4000, fallback: T): Promise<T>
 }
 
 /**
- * Fetch a user's profile document from Firestore with a 4s timeout
+ * Fetch a user's profile document from Firestore.
+ * This is the source of truth across all devices.
  */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
     const userRef = doc(db, 'users', uid);
-    const snap = await withTimeout(getDoc(userRef), 4000, null);
+    const snap = await withTimeout(getDoc(userRef), 8000, null);
 
     if (!snap || !snap.exists()) {
       return null;
@@ -44,7 +45,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
       updatedAt: data.updatedAt,
     };
   } catch (error) {
-    console.warn('Firestore getUserProfile error (using fallback):', error);
+    console.error('Firestore getUserProfile error:', error);
     return null;
   }
 }
@@ -73,14 +74,14 @@ export async function saveUserTop5(
       { merge: true }
     );
 
-    await withTimeout(savePromise, 4000, null);
+    await withTimeout(savePromise, 8000, null);
   } catch (error) {
-    console.warn('Warning saving user top 5 to Firestore:', error);
+    console.error('Error saving user top 5 to Firestore:', error);
   }
 }
 
 /**
- * Save reaction to users/{uid}/reactions/{tmdbId}
+ * Save reaction to users/{uid}/reactions/{tmdbId} in Cloud Firestore.
  * Schema: { mediaType: "movie" | "tv", reaction: string, rating?: number, timestamp: serverTimestamp }
  */
 export async function saveUserReaction(
@@ -97,29 +98,33 @@ export async function saveUserReaction(
 ): Promise<void> {
   try {
     const reactionRef = doc(db, 'users', uid, 'reactions', String(tmdbId));
-    setDoc(reactionRef, {
+    const payload: Record<string, any> = {
       mediaType,
       reaction,
       timestamp: serverTimestamp(),
-      ...(metadata?.title && { title: metadata.title }),
-      ...(metadata?.poster_path !== undefined && { poster_path: metadata.poster_path }),
-      ...(metadata?.genre_ids && { genre_ids: metadata.genre_ids }),
-      ...(metadata?.rating !== undefined && { rating: metadata.rating }),
-    }).catch((err) => console.warn('Background Firestore reaction sync:', err));
+    };
+
+    if (metadata?.title) payload.title = metadata.title;
+    if (metadata?.poster_path !== undefined) payload.poster_path = metadata.poster_path;
+    if (metadata?.genre_ids && Array.isArray(metadata.genre_ids)) payload.genre_ids = metadata.genre_ids;
+    if (metadata?.rating !== undefined) payload.rating = metadata.rating;
+
+    await setDoc(reactionRef, payload, { merge: true });
   } catch (error) {
-    console.warn(`Warning saving reaction for media ${tmdbId}:`, error);
+    console.error(`Error saving reaction to Firestore for ${tmdbId}:`, error);
   }
 }
 
 /**
- * Fetch all reactions for a given user with timeout protection.
+ * Fetch all reactions for a given user from Cloud Firestore.
+ * Returns a map of tmdbId -> UserReaction for instant O(1) lookup.
  */
 export async function getUserReactions(
   uid: string
 ): Promise<Record<number, UserReaction>> {
   try {
     const reactionsRef = collection(db, 'users', uid, 'reactions');
-    const snapshot = await withTimeout(getDocs(reactionsRef), 4000, null);
+    const snapshot = await withTimeout(getDocs(reactionsRef), 8000, null);
     const reactionsMap: Record<number, UserReaction> = {};
 
     if (snapshot && typeof snapshot.forEach === 'function') {
@@ -141,19 +146,19 @@ export async function getUserReactions(
 
     return reactionsMap;
   } catch (error) {
-    console.warn('Warning fetching user reactions from Firestore:', error);
+    console.error('Error fetching user reactions from Firestore:', error);
     return {};
   }
 }
 
 /**
- * Remove a reaction (in case user resets or un-reacts)
+ * Remove a reaction from Firestore
  */
 export async function deleteUserReaction(uid: string, tmdbId: number): Promise<void> {
   try {
     const reactionRef = doc(db, 'users', uid, 'reactions', String(tmdbId));
-    deleteDoc(reactionRef).catch((err) => console.warn('Background reaction deletion error:', err));
+    await deleteDoc(reactionRef);
   } catch (error) {
-    console.warn(`Warning deleting reaction ${tmdbId}:`, error);
+    console.error(`Error deleting reaction ${tmdbId} from Firestore:`, error);
   }
 }
