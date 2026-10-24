@@ -4,7 +4,9 @@ import { MOCK_MEDIA_ITEMS } from './mockData';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 export const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p';
 
-const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY?.trim() || '';
+const tmdbApiKey =
+  import.meta.env.VITE_TMDB_API_KEY?.trim() ||
+  '4bd93e56b203835764b2be61bfb8a342';
 const tmdbToken = import.meta.env.VITE_TMDB_ACCESS_TOKEN?.trim() || '';
 
 export const isTmdbConfigured = Boolean(tmdbApiKey || tmdbToken);
