@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, Tv, Film, Calendar, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
+import { Star, Tv, Film, Calendar, ChevronDown, ChevronUp, Sparkles, Zap, Play } from 'lucide-react';
 import type { MediaItem, ReactionType } from '../../types';
 import { getImageUrl, getGenreName } from '../../api/tmdb';
 import { ReactionButtons } from './ReactionButtons';
@@ -9,6 +9,7 @@ interface MediaCardProps {
   onReact: (media: MediaItem, reaction: ReactionType) => void;
   activeReaction?: ReactionType;
   layout?: 'grid' | 'focus';
+  onOpenDetails?: (media: MediaItem) => void;
 }
 
 export const MediaCard: React.FC<MediaCardProps> = ({
@@ -16,6 +17,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   onReact,
   activeReaction,
   layout = 'grid',
+  onOpenDetails,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -103,10 +105,20 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         </div>
 
         {/* Card Body */}
-        <div className="p-5 sm:p-6 space-y-5">
+        <div className="p-5 sm:p-6 space-y-4">
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed font-normal">
             {media.overview}
           </p>
+
+          {/* Trailer & OTT Streaming Button */}
+          <button
+            type="button"
+            onClick={() => onOpenDetails?.(media)}
+            className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl bg-gradient-to-r from-rose-600/20 via-violet-600/20 to-indigo-600/20 hover:from-rose-600/30 hover:to-indigo-600/30 border border-white/15 hover:border-white/25 text-white font-bold text-sm transition-all shadow-lg hover:shadow-indigo-500/20 cursor-pointer group"
+          >
+            <Play className="w-4 h-4 text-rose-400 fill-rose-400 group-hover:scale-110 transition-transform" />
+            <span>Watch Trailer &amp; Where to Stream (OTT)</span>
+          </button>
 
           <div className="pt-2 border-t border-white/10">
             <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 text-center flex items-center justify-center gap-1.5">
@@ -151,8 +163,12 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         </div>
       )}
 
-      {/* Poster Image */}
-      <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
+      {/* Poster Image (Clickable for Trailer & OTT details) */}
+      <div
+        onClick={() => onOpenDetails?.(media)}
+        className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer group/poster"
+        title={`View Trailer & OTT platforms for ${media.title}`}
+      >
         <img
           src={posterUrl}
           alt={media.title}
@@ -160,7 +176,15 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           loading="lazy"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-transparent to-black/30" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-transparent to-black/30 group-hover/poster:bg-black/30 transition-colors" />
+
+        {/* Hover Trailer Overlay Pill */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/poster:opacity-100 transition-opacity pointer-events-none">
+          <span className="px-3 py-1.5 rounded-full bg-rose-600/95 text-white font-black text-xs flex items-center gap-1.5 shadow-xl shadow-rose-600/40 backdrop-blur-md transform scale-95 group-hover/poster:scale-100 transition-transform">
+            <Play className="w-3.5 h-3.5 fill-white" />
+            <span>Trailer &amp; OTT</span>
+          </span>
+        </div>
 
         {/* Badges */}
         <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
@@ -201,7 +225,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       </div>
 
       {/* Card Content & Reactions */}
-      <div className="flex-1 flex flex-col justify-between p-3.5 gap-3">
+      <div className="flex-1 flex flex-col justify-between p-3.5 gap-2.5">
         <div>
           <p
             className={`text-xs text-slate-400 leading-relaxed ${
@@ -228,6 +252,16 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             </button>
           )}
         </div>
+
+        {/* Trailer & OTT Quick Button */}
+        <button
+          type="button"
+          onClick={() => onOpenDetails?.(media)}
+          className="w-full py-1.5 px-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 hover:border-rose-500/30 text-[11px] font-bold text-slate-200 hover:text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer group/btn"
+        >
+          <Play className="w-3 h-3 text-rose-400 fill-rose-400 group-hover/btn:scale-110 transition-transform" />
+          <span>Trailer &amp; Stream (OTT)</span>
+        </button>
 
         {/* Reaction Buttons (Emoji-Only for clean, un-truncated layout) */}
         <div className="pt-2 border-t border-white/5">

@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { X, Trash2, Film, Tv, BookmarkCheck, LogOut, User as UserIcon } from 'lucide-react';
+import { X, Trash2, Film, Tv, BookmarkCheck, LogOut, User as UserIcon, Play } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { REACTION_CONFIG } from './ReactionButtons';
-import type { ReactionType } from '../../types';
+import type { MediaItem, ReactionType } from '../../types';
 import { getImageUrl } from '../../api/tmdb';
 
 interface ReactionDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenDetails?: (media: MediaItem) => void;
 }
 
-export const ReactionDrawer: React.FC<ReactionDrawerProps> = ({ isOpen, onClose }) => {
+export const ReactionDrawer: React.FC<ReactionDrawerProps> = ({ isOpen, onClose, onOpenDetails }) => {
   const { currentUser, reactions, removeReaction, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<ReactionType | 'all'>('all');
 
@@ -101,20 +102,42 @@ export const ReactionDrawer: React.FC<ReactionDrawerProps> = ({ isOpen, onClose 
           ) : (
             filteredList.map((item) => {
               const config = REACTION_CONFIG[item.reaction];
+              const mediaObj: MediaItem = {
+                id: item.tmdbId,
+                title: item.title || `TMDB ID: ${item.tmdbId}`,
+                overview: '',
+                poster_path: item.poster_path || null,
+                backdrop_path: null,
+                media_type: item.mediaType,
+                vote_average: item.rating || 0,
+                vote_count: 0,
+                genre_ids: item.genre_ids,
+              };
+
               return (
                 <div
                   key={item.tmdbId}
-                  className="flex items-center justify-between gap-3 p-3 bg-slate-950/60 border border-white/5 rounded-2xl hover:border-white/15 transition-colors"
+                  className="flex items-center justify-between gap-3 p-3 bg-slate-950/60 border border-white/5 rounded-2xl hover:border-white/20 transition-all group"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={getImageUrl(item.poster_path, 'w300')}
-                      alt={item.title || 'Media poster'}
-                      className="w-12 h-16 object-cover rounded-xl shrink-0 bg-slate-800"
-                    />
+                  <div
+                    onClick={() => onOpenDetails?.(mediaObj)}
+                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                    title="Click to view trailer & where to stream"
+                  >
+                    <div className="relative w-12 h-16 rounded-xl overflow-hidden shrink-0 bg-slate-800">
+                      <img
+                        src={getImageUrl(item.poster_path, 'w300')}
+                        alt={item.title || 'Media poster'}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Play className="w-4 h-4 text-white fill-white" />
+                      </div>
+                    </div>
                     <div className="min-w-0">
-                      <h4 className="text-sm font-bold text-white truncate">
-                        {item.title || `TMDB ID: ${item.tmdbId}`}
+                      <h4 className="text-sm font-bold text-white truncate group-hover:text-fuchsia-300 transition-colors flex items-center gap-1.5">
+                        <span className="truncate">{item.title || `TMDB ID: ${item.tmdbId}`}</span>
+                        <Play className="w-3 h-3 text-rose-400 fill-rose-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </h4>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400">

@@ -1,4 +1,13 @@
-import type { MediaItem, MediaType, MediaTypeFilter, TasteProfile, TmdbResponse, UserReaction } from '../types';
+import type {
+  MediaItem,
+  MediaType,
+  MediaTypeFilter,
+  TasteProfile,
+  TmdbResponse,
+  UserReaction,
+  MediaVideo,
+  WatchProvidersResponse,
+} from '../types';
 import { MOCK_MEDIA_ITEMS } from './mockData';
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
@@ -106,6 +115,14 @@ export function getImageUrl(
   return `${TMDB_IMAGE_BASE_URL}/${size}${path}`;
 }
 
+export function getProviderLogoUrl(
+  path: string | null | undefined,
+  size: 'w92' | 'w154' | 'w300' | 'original' = 'w154'
+): string {
+  if (!path) return '';
+  return `${TMDB_IMAGE_BASE_URL}/${size}${path}`;
+}
+
 export async function fetchTrending(
   type: MediaTypeFilter = 'all',
   page = 1
@@ -172,6 +189,59 @@ export async function fetchMediaDetails(
     return normalizeMediaItem(data, type);
   } catch {
     return MOCK_MEDIA_ITEMS.find((item) => item.id === id) || null;
+  }
+}
+
+/**
+ * Fetch video trailers and teasers (YouTube) from TMDB
+ */
+export async function fetchMediaVideos(
+  id: number,
+  type: MediaType = 'movie'
+): Promise<MediaVideo[]> {
+  try {
+    const { query, headers } = buildRequestParams();
+    const response = await fetch(`${TMDB_BASE_URL}/${type}/${id}/videos?${query}`, { headers });
+    if (!response.ok) return [];
+    const data = await response.json();
+    const results: MediaVideo[] = (data.results || []).filter(
+      (v: any) => v.site === 'YouTube' && v.key
+    );
+
+    // Prioritize official trailers, then trailers, teasers, clips
+    return results.sort((a, b) => {
+      const getScore = (v: MediaVideo) => {
+        let score = 0;
+        if (v.type === 'Trailer') score += 10;
+        if (v.type === 'Teaser') score += 6;
+        if (v.type === 'Clip') score += 2;
+        if (v.official) score += 3;
+        return score;
+      };
+      return getScore(b) - getScore(a);
+    });
+  } catch (err) {
+    console.warn(`Failed to fetch videos for ${type} ${id}:`, err);
+    return [];
+  }
+}
+
+/**
+ * Fetch OTT Watch Providers (streaming services like Netflix, Prime Video, JioHotstar, Apple TV)
+ */
+export async function fetchWatchProviders(
+  id: number,
+  type: MediaType = 'movie'
+): Promise<WatchProvidersResponse> {
+  try {
+    const { query, headers } = buildRequestParams();
+    const response = await fetch(`${TMDB_BASE_URL}/${type}/${id}/watch/providers?${query}`, { headers });
+    if (!response.ok) return {};
+    const data = await response.json();
+    return data.results || {};
+  } catch (err) {
+    console.warn(`Failed to fetch watch providers for ${type} ${id}:`, err);
+    return {};
   }
 }
 

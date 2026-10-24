@@ -3,8 +3,13 @@ import { Film, LogOut, BookmarkCheck, User as UserIcon, Sparkles } from 'lucide-
 import { useAuth } from '../../context/AuthContext';
 import { ReactionDrawer } from '../media/ReactionDrawer';
 import { calculateTasteProfile } from '../../api/tmdb';
+import type { MediaItem } from '../../types';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  onOpenDetails?: (media: MediaItem) => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onOpenDetails }) => {
   const { currentUser, userProfile, reactions, signOut, isDemoUser } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -101,7 +106,11 @@ export const Navbar: React.FC = () => {
         </div>
       </header>
 
-      <ReactionDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <ReactionDrawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onOpenDetails={onOpenDetails}
+      />
     </>
   );
 };

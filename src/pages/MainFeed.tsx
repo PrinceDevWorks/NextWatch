@@ -6,6 +6,7 @@ import { FilterBar } from '../components/media/FilterBar';
 import { Navbar } from '../components/layout/Navbar';
 import { EmojiLegend } from '../components/media/ReactionButtons';
 import { RatingModal } from '../components/media/RatingModal';
+import { MediaDetailsModal } from '../components/media/MediaDetailsModal';
 import type { MediaItem, MediaTypeFilter, ReactionType } from '../types';
 import { Sparkles, Loader2, RefreshCw, ChevronLeft, ChevronRight, CheckCircle2, Shuffle, Flame } from 'lucide-react';
 
@@ -25,6 +26,15 @@ export const MainFeed: React.FC = () => {
   // Rating Modal state for "Watched" reaction feedback (1-10)
   const [ratingTargetMedia, setRatingTargetMedia] = useState<MediaItem | null>(null);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+
+  // Trailer & Where to Watch (OTT) Modal state
+  const [detailsMedia, setDetailsMedia] = useState<MediaItem | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+
+  const handleOpenDetails = (media: MediaItem) => {
+    setDetailsMedia(media);
+    setIsDetailsModalOpen(true);
+  };
 
   // Compute live taste profile
   const taste = useMemo(() => {
@@ -201,7 +211,7 @@ export const MainFeed: React.FC = () => {
       </div>
 
       {/* Top Navbar */}
-      <Navbar />
+      <Navbar onOpenDetails={handleOpenDetails} />
 
       {/* Main Container */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
@@ -351,6 +361,7 @@ export const MainFeed: React.FC = () => {
                 media={currentFocusItem}
                 layout="focus"
                 onReact={handleReact}
+                onOpenDetails={handleOpenDetails}
               />
             )}
           </div>
@@ -364,6 +375,7 @@ export const MainFeed: React.FC = () => {
                   media={media}
                   layout="grid"
                   onReact={handleReact}
+                  onOpenDetails={handleOpenDetails}
                 />
               ))}
             </div>
@@ -400,6 +412,15 @@ export const MainFeed: React.FC = () => {
         onClose={() => setIsRatingModalOpen(false)}
         onSubmitRating={handleRatingSubmit}
         onSkipRating={handleRatingSkip}
+      />
+
+      {/* Trailer & OTT Streaming Details Modal */}
+      <MediaDetailsModal
+        media={detailsMedia}
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
+        activeReaction={detailsMedia ? reactions[detailsMedia.id]?.reaction : undefined}
+        onReact={handleReact}
       />
     </div>
   );
