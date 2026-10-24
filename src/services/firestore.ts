@@ -11,14 +11,24 @@ import { db } from './firebase';
 import type { MediaType, ReactionType, UserProfile, UserReaction } from '../types';
 
 /**
- * Fetch a user's profile document from Firestore.
+ * Helper to race any promise against a timeout in milliseconds
+ */
+function withTimeout<T>(promise: Promise<T>, ms = 4000, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
+/**
+ * Fetch a user's profile document from Firestore with a 4s timeout
  */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
     const userRef = doc(db, 'users', uid);
-    const snap = await getDoc(userRef);
+    const snap = await withTimeout(getDoc(userRef), 4000, null);
 
-    if (!snap.exists()) {
+    if (!snap || !snap.exists()) {
       return null;
     }
 
@@ -34,13 +44,14 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
       updatedAt: data.updatedAt,
     };
   } catch (error) {
-    console.error('Error fetching user profile:', error);
-    throw error;
+    console.warn('Firestore getUserProfile error (using fallback):', error);
+    return null;
   }
 }
 
 /**
  * Save user onboarding top 5 choices and mark onboardingCompleted: true
+ * Times out after 4 seconds to never freeze the user if the Firestore database is not yet created.
  */
 export async function saveUserTop5(
   uid: string,
@@ -50,7 +61,7 @@ export async function saveUserTop5(
 ): Promise<void> {
   try {
     const userRef = doc(db, 'users', uid);
-    await setDoc(
+    const savePromise = setDoc(
       userRef,
       {
         email,
@@ -62,9 +73,10 @@ export async function saveUserTop5(
       },
       { merge: true }
     );
+
+    await withTimeout(savePromise, 4000, null);
   } catch (error) {
-    console.error('Error saving user top 5:', error);
-    throw error;
+    console.warn('Warning saving user top 5 to Firestore:', error);
   }
 }
 
@@ -81,47 +93,47 @@ export async function saveUserReaction(
 ): Promise<void> {
   try {
     const reactionRef = doc(db, 'users', uid, 'reactions', String(tmdbId));
-    await setDoc(reactionRef, {
+    setDoc(reactionRef, {
       mediaType,
       reaction,
       timestamp: serverTimestamp(),
       ...(metadata?.title && { title: metadata.title }),
       ...(metadata?.poster_path !== undefined && { poster_path: metadata.poster_path }),
-    });
+    }).catch((err) => console.warn('Background Firestore reaction sync:', err));
   } catch (error) {
-    console.error(`Error saving reaction for media ${tmdbId}:`, error);
-    throw error;
+    console.warn(`Warning saving reaction for media ${tmdbId}:`, error);
   }
 }
 
 /**
- * Fetch all reactions for a given user.
- * Returns a map of tmdbId -> UserReaction for instant O(1) lookup.
+ * Fetch all reactions for a given user with timeout protection.
  */
 export async function getUserReactions(
   uid: string
 ): Promise<Record<number, UserReaction>> {
   try {
     const reactionsRef = collection(db, 'users', uid, 'reactions');
-    const snapshot = await getDocs(reactionsRef);
+    const snapshot = await withTimeout(getDocs(reactionsRef), 4000, null);
     const reactionsMap: Record<number, UserReaction> = {};
 
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      const id = Number(docSnap.id);
-      reactionsMap[id] = {
-        tmdbId: id,
-        mediaType: data.mediaType as MediaType,
-        reaction: data.reaction as ReactionType,
-        timestamp: data.timestamp,
-        title: data.title,
-        poster_path: data.poster_path,
-      };
-    });
+    if (snapshot && typeof snapshot.forEach === 'function') {
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const id = Number(docSnap.id);
+        reactionsMap[id] = {
+          tmdbId: id,
+          mediaType: data.mediaType as MediaType,
+          reaction: data.reaction as ReactionType,
+          timestamp: data.timestamp,
+          title: data.title,
+          poster_path: data.poster_path,
+        };
+      });
+    }
 
     return reactionsMap;
   } catch (error) {
-    console.error('Error fetching user reactions:', error);
+    console.warn('Warning fetching user reactions from Firestore:', error);
     return {};
   }
 }
@@ -132,9 +144,8 @@ export async function getUserReactions(
 export async function deleteUserReaction(uid: string, tmdbId: number): Promise<void> {
   try {
     const reactionRef = doc(db, 'users', uid, 'reactions', String(tmdbId));
-    await deleteDoc(reactionRef);
+    deleteDoc(reactionRef).catch((err) => console.warn('Background reaction deletion error:', err));
   } catch (error) {
-    console.error(`Error deleting reaction ${tmdbId}:`, error);
-    throw error;
+    console.warn(`Warning deleting reaction ${tmdbId}:`, error);
   }
 }

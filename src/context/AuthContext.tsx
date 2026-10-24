@@ -57,7 +57,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       if (user.uid === DEMO_USER_UID) {
-        // Load demo user state from localStorage
         const cachedProfile = localStorage.getItem('nextwatch_demo_profile');
         const cachedReactions = localStorage.getItem('nextwatch_demo_reactions');
 
@@ -77,16 +76,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Live Firestore sync
-      const [profile, userReactions] = await Promise.all([
+      // Check local cache backup first
+      const localProfileRaw = localStorage.getItem(`nextwatch_profile_${user.uid}`);
+      const localReactionsRaw = localStorage.getItem(`nextwatch_reactions_${user.uid}`);
+      const localProfile: UserProfile | null = localProfileRaw ? JSON.parse(localProfileRaw) : null;
+      const localReactions: Record<number, UserReaction> = localReactionsRaw
+        ? JSON.parse(localReactionsRaw)
+        : {};
+
+      // If user has local onboarding completed, respect it immediately
+      if (localProfile?.onboardingCompleted) {
+        setUserProfile(localProfile);
+        setReactions(localReactions);
+      }
+
+      // Live Firestore sync with timeout
+      const [remoteProfile, remoteReactions] = await Promise.all([
         getUserProfile(user.uid),
         getUserReactions(user.uid),
       ]);
 
-      if (profile) {
-        setUserProfile(profile);
-      } else {
-        // New user document not yet written
+      if (remoteProfile) {
+        setUserProfile(remoteProfile);
+        localStorage.setItem(`nextwatch_profile_${user.uid}`, JSON.stringify(remoteProfile));
+      } else if (!localProfile) {
         setUserProfile({
           uid: user.uid,
           email: user.email,
@@ -97,23 +110,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
 
-      setReactions(userReactions);
+      if (Object.keys(remoteReactions).length > 0) {
+        const mergedReactions = { ...localReactions, ...remoteReactions };
+        setReactions(mergedReactions);
+        localStorage.setItem(`nextwatch_reactions_${user.uid}`, JSON.stringify(mergedReactions));
+      }
     } catch (err) {
-      console.error('Error syncing user data:', err);
-      // Fallback empty profile to prevent blocking
-      setUserProfile({
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        onboardingCompleted: false,
-        top5: [],
-      });
+      console.warn('Error syncing user data:', err);
     }
   }, []);
 
   useEffect(() => {
-    // Check if demo user was active
     const savedDemo = localStorage.getItem('nextwatch_is_demo_session');
     if (savedDemo === 'true') {
       setIsDemoUser(true);
@@ -149,9 +156,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [syncUserData]);
 
   const signInWithGoogle = async () => {
-    if (!isFirebaseConfigured) {
-      throw new Error('Firebase credentials are not configured in your .env file.');
-    }
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
@@ -199,37 +203,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const completeOnboarding = async (top5: number[]) => {
     if (!currentUser) throw new Error('No user logged in');
 
-    if (isDemoUser) {
-      const updatedProfile: UserProfile = {
-        uid: currentUser.uid,
-        email: currentUser.email,
-        displayName: currentUser.displayName,
-        photoURL: currentUser.photoURL,
-        onboardingCompleted: true,
-        top5,
-      };
-      localStorage.setItem('nextwatch_demo_profile', JSON.stringify(updatedProfile));
-      setUserProfile(updatedProfile);
-      return;
-    }
-
-    await saveUserTop5(currentUser.uid, currentUser.email, top5, {
+    const updatedProfile: UserProfile = {
+      uid: currentUser.uid,
+      email: currentUser.email,
       displayName: currentUser.displayName,
       photoURL: currentUser.photoURL,
-    });
+      onboardingCompleted: true,
+      top5,
+    };
 
-    setUserProfile((prev) =>
-      prev
-        ? { ...prev, onboardingCompleted: true, top5 }
-        : {
-            uid: currentUser.uid,
-            email: currentUser.email,
-            displayName: currentUser.displayName,
-            photoURL: currentUser.photoURL,
-            onboardingCompleted: true,
-            top5,
-          }
-    );
+    // Always update local cache & state immediately
+    if (isDemoUser) {
+      localStorage.setItem('nextwatch_demo_profile', JSON.stringify(updatedProfile));
+    } else {
+      localStorage.setItem(`nextwatch_profile_${currentUser.uid}`, JSON.stringify(updatedProfile));
+    }
+    setUserProfile(updatedProfile);
+
+    if (!isDemoUser) {
+      // Fire-and-forget save to Firestore with timeout
+      await saveUserTop5(currentUser.uid, currentUser.email, top5, {
+        displayName: currentUser.displayName,
+        photoURL: currentUser.photoURL,
+      });
+    }
   };
 
   const addReaction = async (
@@ -250,10 +247,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       poster_path: metadata?.poster_path,
     };
 
-    setReactions((prev) => ({
-      ...prev,
-      [tmdbId]: newReaction,
-    }));
+    setReactions((prev) => {
+      const next = { ...prev, [tmdbId]: newReaction };
+      if (!isDemoUser) {
+        localStorage.setItem(`nextwatch_reactions_${currentUser.uid}`, JSON.stringify(next));
+      }
+      return next;
+    });
 
     if (isDemoUser) {
       const updated = {
@@ -264,7 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Persist to Firestore
+    // Persist to Firestore in background
     await saveUserReaction(currentUser.uid, tmdbId, mediaType, reaction, metadata);
   };
 
@@ -274,6 +274,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setReactions((prev) => {
       const copy = { ...prev };
       delete copy[tmdbId];
+      if (!isDemoUser) {
+        localStorage.setItem(`nextwatch_reactions_${currentUser.uid}`, JSON.stringify(copy));
+      }
       return copy;
     });
 
