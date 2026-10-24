@@ -30,7 +30,12 @@ interface AuthContextType {
     tmdbId: number,
     mediaType: MediaType,
     reaction: ReactionType,
-    metadata?: { title?: string; poster_path?: string | null }
+    metadata?: {
+      title?: string;
+      poster_path?: string | null;
+      genre_ids?: number[];
+      rating?: number;
+    }
   ) => Promise<void>;
   removeReaction: (tmdbId: number) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -233,7 +238,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     tmdbId: number,
     mediaType: MediaType,
     reaction: ReactionType,
-    metadata?: { title?: string; poster_path?: string | null }
+    metadata?: {
+      title?: string;
+      poster_path?: string | null;
+      genre_ids?: number[];
+      rating?: number;
+    }
   ) => {
     if (!currentUser) return;
 
@@ -245,6 +255,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       timestamp: Date.now(),
       title: metadata?.title,
       poster_path: metadata?.poster_path,
+      genre_ids: metadata?.genre_ids,
+      rating: metadata?.rating,
     };
 
     setReactions((prev) => {

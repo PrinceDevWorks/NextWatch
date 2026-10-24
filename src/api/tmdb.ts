@@ -278,19 +278,35 @@ export function calculateTasteProfile(
     }
   });
 
-  // Factor in live reactions dynamically!
+  // Factor in live reactions dynamically with user rating feedback!
   Object.values(reactions).forEach((r) => {
     let weight = 0;
     if (r.reaction === 'seems_good') {
-      weight = 3.0;
+      // 🔥 Fire is a Super Like / Must-Watch priority
+      weight = 4.0;
       positiveSeedIds.push(r.tmdbId);
     } else if (r.reaction === 'watched') {
-      weight = 2.0;
-      positiveSeedIds.push(r.tmdbId);
+      // Watched with user rating feedback (1-10)
+      if (typeof r.rating === 'number') {
+        if (r.rating >= 9) {
+          weight = 5.0; // Masterpiece! Strongest boost
+          positiveSeedIds.push(r.tmdbId);
+        } else if (r.rating >= 7) {
+          weight = 3.5; // Great title
+          positiveSeedIds.push(r.tmdbId);
+        } else if (r.rating >= 6) {
+          weight = 1.5; // Decent
+        } else {
+          weight = -3.0; // Watched but disliked (<= 5/10), downweight!
+        }
+      } else {
+        weight = 2.0;
+        positiveSeedIds.push(r.tmdbId);
+      }
     } else if (r.reaction === 'maybe') {
       weight = 0.5;
     } else if (r.reaction === 'nah') {
-      weight = -2.5; // Downweight disliked genres
+      weight = -3.0; // Downweight disliked genres
     }
 
     if (r.genre_ids && r.genre_ids.length > 0) {

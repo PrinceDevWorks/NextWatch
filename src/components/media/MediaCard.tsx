@@ -114,6 +114,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             </div>
             <ReactionButtons
               size="lg"
+              variant="full"
               activeReaction={activeReaction}
               onReact={(reaction) => onReact(media, reaction)}
             />
@@ -123,7 +124,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
     );
   }
 
-  // Standard Grid Layout
+  // Standard Grid Layout (Uses Emoji-Only buttons with zero text truncation!)
   return (
     <div
       className={`group flex flex-col bg-slate-900/70 hover:bg-slate-900 border rounded-3xl overflow-hidden shadow-xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 ${
@@ -228,10 +229,11 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           )}
         </div>
 
-        {/* Reaction Buttons */}
+        {/* Reaction Buttons (Emoji-Only for clean, un-truncated layout) */}
         <div className="pt-2 border-t border-white/5">
           <ReactionButtons
-            size="sm"
+            size="md"
+            variant="emoji-only"
             activeReaction={activeReaction}
             onReact={(reaction) => onReact(media, reaction)}
           />

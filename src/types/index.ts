@@ -6,6 +6,7 @@ export type ReactionType = 'watched' | 'seems_good' | 'maybe' | 'nah';
 export interface ReactionConfig {
   id: ReactionType;
   label: string;
+  emoji: string;
   icon: string;
   color: string;
   bgColor: string;
@@ -16,14 +17,14 @@ export interface MediaItem {
   id: number;
   title: string;
   original_title?: string;
-  name?: string; // TV shows use name
+  name?: string;
   original_name?: string;
   overview: string;
   poster_path: string | null;
   backdrop_path: string | null;
   media_type: MediaType;
-  release_date?: string; // Movies
-  first_air_date?: string; // TV shows
+  release_date?: string;
+  first_air_date?: string;
   vote_average: number;
   vote_count: number;
   genre_ids?: number[];
@@ -53,6 +54,7 @@ export interface UserReaction {
   title?: string;
   poster_path?: string | null;
   genre_ids?: number[];
+  rating?: number; // 1 to 10 rating for watched items
 }
 
 export interface TasteProfile {

@@ -51,7 +51,6 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 
 /**
  * Save user onboarding top 5 choices and mark onboardingCompleted: true
- * Times out after 4 seconds to never freeze the user if the Firestore database is not yet created.
  */
 export async function saveUserTop5(
   uid: string,
@@ -82,14 +81,19 @@ export async function saveUserTop5(
 
 /**
  * Save reaction to users/{uid}/reactions/{tmdbId}
- * Schema: { mediaType: "movie" | "tv", reaction: string, timestamp: serverTimestamp }
+ * Schema: { mediaType: "movie" | "tv", reaction: string, rating?: number, timestamp: serverTimestamp }
  */
 export async function saveUserReaction(
   uid: string,
   tmdbId: number,
   mediaType: MediaType,
   reaction: ReactionType,
-  metadata?: { title?: string; poster_path?: string | null }
+  metadata?: {
+    title?: string;
+    poster_path?: string | null;
+    genre_ids?: number[];
+    rating?: number;
+  }
 ): Promise<void> {
   try {
     const reactionRef = doc(db, 'users', uid, 'reactions', String(tmdbId));
@@ -99,6 +103,8 @@ export async function saveUserReaction(
       timestamp: serverTimestamp(),
       ...(metadata?.title && { title: metadata.title }),
       ...(metadata?.poster_path !== undefined && { poster_path: metadata.poster_path }),
+      ...(metadata?.genre_ids && { genre_ids: metadata.genre_ids }),
+      ...(metadata?.rating !== undefined && { rating: metadata.rating }),
     }).catch((err) => console.warn('Background Firestore reaction sync:', err));
   } catch (error) {
     console.warn(`Warning saving reaction for media ${tmdbId}:`, error);
@@ -127,6 +133,8 @@ export async function getUserReactions(
           timestamp: data.timestamp,
           title: data.title,
           poster_path: data.poster_path,
+          genre_ids: data.genre_ids,
+          rating: data.rating,
         };
       });
     }

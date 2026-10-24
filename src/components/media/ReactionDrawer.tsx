@@ -131,6 +131,11 @@ export const ReactionDrawer: React.FC<ReactionDrawerProps> = ({ isOpen, onClose 
                           <span>{config.emoji}</span>
                           <span>{config.label}</span>
                         </span>
+                        {item.rating !== undefined && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                            ⭐ {item.rating}/10
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

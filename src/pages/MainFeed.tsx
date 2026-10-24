@@ -4,6 +4,8 @@ import { fetchPersonalizedFeed, searchMedia, calculateTasteProfile } from '../ap
 import { MediaCard } from '../components/media/MediaCard';
 import { FilterBar } from '../components/media/FilterBar';
 import { Navbar } from '../components/layout/Navbar';
+import { EmojiLegend } from '../components/media/ReactionButtons';
+import { RatingModal } from '../components/media/RatingModal';
 import type { MediaItem, MediaTypeFilter, ReactionType } from '../types';
 import { Sparkles, Loader2, RefreshCw, ChevronLeft, ChevronRight, CheckCircle2, Shuffle, Flame } from 'lucide-react';
 
@@ -19,6 +21,10 @@ export const MainFeed: React.FC = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [focusIndex, setFocusIndex] = useState(0);
   const [recentReactionNotice, setRecentReactionNotice] = useState<string | null>(null);
+
+  // Rating Modal state for "Watched" reaction feedback (1-10)
+  const [ratingTargetMedia, setRatingTargetMedia] = useState<MediaItem | null>(null);
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
 
   // Compute live taste profile
   const taste = useMemo(() => {
@@ -40,7 +46,6 @@ export const MainFeed: React.FC = () => {
         if (searchQuery.trim()) {
           results = await searchMedia(searchQuery, filter, pageToLoad);
         } else {
-          // Master Spotify-style Personalized Engine
           results = await fetchPersonalizedFeed({
             top5Ids: userProfile?.top5 || [],
             reactions,
@@ -69,7 +74,6 @@ export const MainFeed: React.FC = () => {
     [filter, searchQuery, userProfile?.top5, reactions]
   );
 
-  // Trigger search with debounce or reload personalized stream
   useEffect(() => {
     setCurrentPage(1);
     const timer = setTimeout(() => {
@@ -79,7 +83,6 @@ export const MainFeed: React.FC = () => {
     return () => clearTimeout(timer);
   }, [loadMedia, searchQuery, filter]);
 
-  // Discovery Filter: Only show items that have NOT been reacted to yet
   const discoveryItems = useMemo(() => {
     return mediaList.filter((item) => !reactions[item.id]);
   }, [mediaList, reactions]);
@@ -100,25 +103,84 @@ export const MainFeed: React.FC = () => {
     }
   }, [discoveryItems.length, focusIndex]);
 
-  // Handle user reaction
+  // Handle user reaction click
   const handleReact = async (media: MediaItem, reaction: ReactionType) => {
+    // If user marked as "Watched", prompt for 1-10 rating feedback!
+    if (reaction === 'watched') {
+      setRatingTargetMedia(media);
+      setIsRatingModalOpen(true);
+      return;
+    }
+
     try {
       await addReaction(media.id, media.media_type, reaction, {
         title: media.title,
         poster_path: media.poster_path,
+        genre_ids: media.genre_ids,
       });
 
-      // Show Gen Z taste calibration toast
-      const reactionWord = reaction === 'seems_good' ? '🔥 Fire' : reaction === 'watched' ? '👀 Watched' : reaction === 'maybe' ? '🤔 Maybe' : '💀 Pass';
-      setRecentReactionNotice(`${reactionWord} saved • Recalibrated your ${taste.topGenreNames[0] || 'taste'} feed!`);
-      setTimeout(() => setRecentReactionNotice(null), 2500);
+      if (reaction === 'seems_good') {
+        setRecentReactionNotice(`🔥 Super Liked "${media.title}"! Prioritizing similar vibes.`);
+      } else if (reaction === 'nah') {
+        setRecentReactionNotice(`💀 Passed on "${media.title}" • Disliked genres downweighted.`);
+      } else {
+        setRecentReactionNotice(`🤔 Saved "${media.title}" to Maybe.`);
+      }
+      setTimeout(() => setRecentReactionNotice(null), 3000);
 
-      // In focus mode, advance
       if (viewMode === 'focus' && focusIndex >= discoveryItems.length - 1) {
         setFocusIndex(Math.max(0, discoveryItems.length - 2));
       }
     } catch (err) {
       console.error('Failed to record reaction:', err);
+    }
+  };
+
+  // Submit 1-10 rating from modal
+  const handleRatingSubmit = async (media: MediaItem, rating: number) => {
+    setIsRatingModalOpen(false);
+    try {
+      await addReaction(media.id, media.media_type, 'watched', {
+        title: media.title,
+        poster_path: media.poster_path,
+        genre_ids: media.genre_ids,
+        rating,
+      });
+
+      if (rating >= 8) {
+        setRecentReactionNotice(`🏆 Rated ${rating}/10! Masterpiece added to your taste seed algorithm.`);
+      } else if (rating <= 5) {
+        setRecentReactionNotice(`💀 Rated ${rating}/10 • We'll show less of this genre in future mixes.`);
+      } else {
+        setRecentReactionNotice(`👀 Rated ${rating}/10 • Logged in your Watched activity.`);
+      }
+      setTimeout(() => setRecentReactionNotice(null), 3200);
+
+      if (viewMode === 'focus' && focusIndex >= discoveryItems.length - 1) {
+        setFocusIndex(Math.max(0, discoveryItems.length - 2));
+      }
+    } catch (err) {
+      console.error('Failed to submit rating:', err);
+    }
+  };
+
+  // Skip rating from modal
+  const handleRatingSkip = async (media: MediaItem) => {
+    setIsRatingModalOpen(false);
+    try {
+      await addReaction(media.id, media.media_type, 'watched', {
+        title: media.title,
+        poster_path: media.poster_path,
+        genre_ids: media.genre_ids,
+      });
+      setRecentReactionNotice(`👀 Marked "${media.title}" as Watched.`);
+      setTimeout(() => setRecentReactionNotice(null), 2500);
+
+      if (viewMode === 'focus' && focusIndex >= discoveryItems.length - 1) {
+        setFocusIndex(Math.max(0, discoveryItems.length - 2));
+      }
+    } catch (err) {
+      console.error('Failed to skip rating:', err);
     }
   };
 
@@ -142,7 +204,7 @@ export const MainFeed: React.FC = () => {
       <Navbar />
 
       {/* Main Container */}
-      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
         {/* Spotify-Style Taste DNA Header Banner */}
         {!searchQuery && (
           <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 bg-gradient-to-r from-violet-950/60 via-slate-900/80 to-slate-950/90 border border-white/10 shadow-2xl backdrop-blur-2xl">
@@ -182,6 +244,9 @@ export const MainFeed: React.FC = () => {
           </div>
         )}
 
+        {/* Reaction Emoji Legend */}
+        <EmojiLegend />
+
         {/* Filter and Search Bar */}
         <FilterBar
           filter={filter}
@@ -195,7 +260,7 @@ export const MainFeed: React.FC = () => {
 
         {/* Temporary Feedback Notification */}
         {recentReactionNotice && (
-          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-slate-900/95 border border-fuchsia-500/50 text-white text-xs sm:text-sm font-bold shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-3 duration-200">
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-5 py-3.5 rounded-2xl bg-slate-900/95 border border-fuchsia-500/50 text-white text-xs sm:text-sm font-black shadow-2xl backdrop-blur-2xl animate-in slide-in-from-bottom-3 duration-200">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{recentReactionNotice}</span>
           </div>
@@ -290,7 +355,7 @@ export const MainFeed: React.FC = () => {
             )}
           </div>
         ) : (
-          /* Grid View Mode: Responsive 4-column cards */
+          /* Grid View Mode: Responsive 4-column cards with Emoji-Only reaction buttons */
           <div className="space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
               {discoveryItems.map((media) => (
@@ -327,6 +392,15 @@ export const MainFeed: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Interactive 1-10 Rating Modal for Watched Titles */}
+      <RatingModal
+        media={ratingTargetMedia}
+        isOpen={isRatingModalOpen}
+        onClose={() => setIsRatingModalOpen(false)}
+        onSubmitRating={handleRatingSubmit}
+        onSkipRating={handleRatingSkip}
+      />
     </div>
   );
 };
