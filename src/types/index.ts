@@ -28,6 +28,10 @@ export interface MediaItem {
   vote_count: number;
   genre_ids?: number[];
   popularity?: number;
+  // Spotify-style Smart Recommendation Attributes
+  matchScore?: number;
+  recommendationReason?: string;
+  isWildcard?: boolean;
 }
 
 export interface UserProfile {
@@ -48,6 +52,14 @@ export interface UserReaction {
   timestamp: unknown;
   title?: string;
   poster_path?: string | null;
+  genre_ids?: number[];
+}
+
+export interface TasteProfile {
+  genreWeights: Record<number, number>;
+  topGenreIds: number[];
+  topGenreNames: string[];
+  positiveSeedIds: number[];
 }
 
 export interface TmdbResponse<T> {

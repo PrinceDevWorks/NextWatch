@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { fetchTrending, searchMedia } from '../api/tmdb';
+import { fetchPersonalizedFeed, searchMedia, calculateTasteProfile } from '../api/tmdb';
 import { MediaCard } from '../components/media/MediaCard';
 import { FilterBar } from '../components/media/FilterBar';
 import { Navbar } from '../components/layout/Navbar';
 import type { MediaItem, MediaTypeFilter, ReactionType } from '../types';
-import { Sparkles, Loader2, RefreshCw, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Loader2, RefreshCw, ChevronLeft, ChevronRight, CheckCircle2, Shuffle, Flame } from 'lucide-react';
 
 export const MainFeed: React.FC = () => {
-  const { reactions, addReaction } = useAuth();
+  const { userProfile, reactions, addReaction } = useAuth();
 
   const [filter, setFilter] = useState<MediaTypeFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,7 +20,12 @@ export const MainFeed: React.FC = () => {
   const [focusIndex, setFocusIndex] = useState(0);
   const [recentReactionNotice, setRecentReactionNotice] = useState<string | null>(null);
 
-  // Fetch initial batch when filter changes or on mount
+  // Compute live taste profile
+  const taste = useMemo(() => {
+    return calculateTasteProfile(userProfile?.top5 || [], reactions);
+  }, [userProfile?.top5, reactions]);
+
+  // Fetch personalized Spotify-style feed
   const loadMedia = useCallback(
     async (pageToLoad = 1, append = false) => {
       try {
@@ -35,7 +40,13 @@ export const MainFeed: React.FC = () => {
         if (searchQuery.trim()) {
           results = await searchMedia(searchQuery, filter, pageToLoad);
         } else {
-          results = await fetchTrending(filter, pageToLoad);
+          // Master Spotify-style Personalized Engine
+          results = await fetchPersonalizedFeed({
+            top5Ids: userProfile?.top5 || [],
+            reactions,
+            filter,
+            page: pageToLoad,
+          });
         }
 
         if (append) {
@@ -55,10 +66,10 @@ export const MainFeed: React.FC = () => {
         setIsLoadingMore(false);
       }
     },
-    [filter, searchQuery]
+    [filter, searchQuery, userProfile?.top5, reactions]
   );
 
-  // Trigger search with debounce or reload trending
+  // Trigger search with debounce or reload personalized stream
   useEffect(() => {
     setCurrentPage(1);
     const timer = setTimeout(() => {
@@ -72,6 +83,15 @@ export const MainFeed: React.FC = () => {
   const discoveryItems = useMemo(() => {
     return mediaList.filter((item) => !reactions[item.id]);
   }, [mediaList, reactions]);
+
+  // Auto-paginate if remaining items are low
+  useEffect(() => {
+    if (!isLoading && !isLoadingMore && discoveryItems.length > 0 && discoveryItems.length < 4 && !searchQuery) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      loadMedia(nextPage, true);
+    }
+  }, [discoveryItems.length, isLoading, isLoadingMore, currentPage, loadMedia, searchQuery]);
 
   // Adjust focusIndex when list shrinks
   useEffect(() => {
@@ -88,11 +108,12 @@ export const MainFeed: React.FC = () => {
         poster_path: media.poster_path,
       });
 
-      // Show brief floating feedback toast
-      setRecentReactionNotice(`Marked "${media.title}" as ${reaction.replace('_', ' ')}`);
+      // Show Gen Z taste calibration toast
+      const reactionWord = reaction === 'seems_good' ? '🔥 Fire' : reaction === 'watched' ? '👀 Watched' : reaction === 'maybe' ? '🤔 Maybe' : '💀 Pass';
+      setRecentReactionNotice(`${reactionWord} saved • Recalibrated your ${taste.topGenreNames[0] || 'taste'} feed!`);
       setTimeout(() => setRecentReactionNotice(null), 2500);
 
-      // In focus mode, automatically advance
+      // In focus mode, advance
       if (viewMode === 'focus' && focusIndex >= discoveryItems.length - 1) {
         setFocusIndex(Math.max(0, discoveryItems.length - 2));
       }
@@ -110,12 +131,57 @@ export const MainFeed: React.FC = () => {
   const currentFocusItem = discoveryItems[focusIndex];
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col text-slate-100 selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-[#05070f] flex flex-col text-slate-100 selection:bg-fuchsia-500 selection:text-white">
+      {/* Background Neon Glows */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-32 left-1/3 w-[600px] h-[500px] bg-gradient-to-tr from-violet-600/15 via-fuchsia-600/10 to-transparent blur-[120px]" />
+        <div className="absolute top-1/2 -right-40 w-[500px] h-[500px] bg-cyan-600/10 blur-[140px]" />
+      </div>
+
       {/* Top Navbar */}
       <Navbar />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Spotify-Style Taste DNA Header Banner */}
+        {!searchQuery && (
+          <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 bg-gradient-to-r from-violet-950/60 via-slate-900/80 to-slate-950/90 border border-white/10 shadow-2xl backdrop-blur-2xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-fuchsia-500/20 border border-fuchsia-500/30 text-fuchsia-300 mb-2">
+                  <Flame className="w-3.5 h-3.5 text-fuchsia-400" />
+                  <span>Discover Mix &bull; Tuned For You</span>
+                </div>
+                <h1 className="text-xl sm:text-3xl font-black text-white tracking-tight">
+                  Your Taste Radar
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                  75% tailored to your favorite genres + 25% wildcard surprises to check out.
+                </p>
+              </div>
+
+              {/* Dynamic Genre Affinity Pills */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 mr-1">Active Vibe:</span>
+                {taste.topGenreNames.map((name, i) => (
+                  <span
+                    key={name}
+                    className={`px-3 py-1 rounded-full text-xs font-black tracking-wide border shadow-sm ${
+                      i === 0
+                        ? 'bg-gradient-to-r from-violet-500/30 to-fuchsia-500/30 border-fuchsia-500/50 text-fuchsia-200'
+                        : i === 1
+                        ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-200'
+                        : 'bg-cyan-500/20 border-cyan-500/40 text-cyan-200'
+                    }`}
+                  >
+                    #{name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filter and Search Bar */}
         <FilterBar
           filter={filter}
@@ -129,49 +195,54 @@ export const MainFeed: React.FC = () => {
 
         {/* Temporary Feedback Notification */}
         {recentReactionNotice && (
-          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 border border-indigo-500/50 text-indigo-300 text-xs font-semibold shadow-2xl animate-in slide-in-from-bottom-2 duration-200">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-slate-900/95 border border-fuchsia-500/50 text-white text-xs sm:text-sm font-bold shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-3 duration-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{recentReactionNotice}</span>
           </div>
         )}
 
         {/* Loading Spinner */}
         {isLoading ? (
-          <div className="py-24 flex flex-col items-center justify-center text-slate-400">
-            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
-            <p className="text-sm font-medium">Curating your discovery feed...</p>
+          <div className="py-28 flex flex-col items-center justify-center text-slate-400">
+            <div className="relative mb-4">
+              <div className="w-14 h-14 rounded-3xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center shadow-xl shadow-fuchsia-500/25 animate-pulse">
+                <Sparkles className="w-7 h-7 text-white" />
+              </div>
+              <div className="absolute inset-0 rounded-3xl border-2 border-fuchsia-500 border-t-transparent animate-spin" />
+            </div>
+            <p className="text-sm font-bold text-slate-300">Curating your personalized watch mix...</p>
           </div>
         ) : discoveryItems.length === 0 ? (
-          /* Empty State when all items have been reacted to or nothing matched */
-          <div className="py-20 flex flex-col items-center justify-center text-center max-w-md mx-auto p-8 rounded-3xl bg-slate-900/60 border border-slate-800">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-4">
-              <Sparkles className="w-7 h-7" />
+          /* Empty State when all items have been reacted to */
+          <div className="py-20 flex flex-col items-center justify-center text-center max-w-md mx-auto p-8 rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl">
+            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-white mb-4 shadow-xl shadow-fuchsia-500/25">
+              <Sparkles className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">You're All Caught Up!</h3>
+            <h3 className="text-2xl font-black text-white mb-2">Batch Cleared! 🔥</h3>
             <p className="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
               {searchQuery
-                ? `No unreacted titles match "${searchQuery}". Try a different keyword.`
-                : "You've reviewed every trending title in this batch. Load the next page to discover more gems, or switch filters!"}
+                ? `No unreacted titles match "${searchQuery}". Try another keyword or vibe.`
+                : "You've reviewed every title in this batch. Click below to shuffle and pull the next personalized batch!"}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
                 onClick={handleLoadMore}
                 disabled={isLoadingMore}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-xs sm:text-sm font-black shadow-xl shadow-fuchsia-600/30 transition-all cursor-pointer"
               >
                 {isLoadingMore ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="w-4 h-4" />
+                  <Shuffle className="w-4 h-4" />
                 )}
-                <span>Load More Discoveries</span>
+                <span>Shuffle Next Watch Mix</span>
               </button>
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold transition-all cursor-pointer"
+                  className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs sm:text-sm font-bold transition-all cursor-pointer"
                 >
                   Clear Search
                 </button>
@@ -183,15 +254,15 @@ export const MainFeed: React.FC = () => {
           <div className="py-4 flex flex-col items-center">
             {/* Focus Pagination Controls */}
             <div className="flex items-center justify-between w-full max-w-xl mb-4 px-2">
-              <span className="text-xs font-semibold text-slate-400">
-                Item {focusIndex + 1} of {discoveryItems.length}
+              <span className="text-xs font-black text-slate-400">
+                Card {focusIndex + 1} of {discoveryItems.length}
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   disabled={focusIndex === 0}
                   onClick={() => setFocusIndex((prev) => Math.max(0, prev - 1))}
-                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                   title="Previous"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -202,7 +273,7 @@ export const MainFeed: React.FC = () => {
                   onClick={() =>
                     setFocusIndex((prev) => Math.min(discoveryItems.length - 1, prev + 1))
                   }
-                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                   title="Next"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -219,7 +290,7 @@ export const MainFeed: React.FC = () => {
             )}
           </div>
         ) : (
-          /* Grid View Mode: Responsive 4-5 column grid */
+          /* Grid View Mode: Responsive 4-column cards */
           <div className="space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
               {discoveryItems.map((media) => (
@@ -233,22 +304,22 @@ export const MainFeed: React.FC = () => {
             </div>
 
             {/* Load More Button */}
-            <div className="pt-6 pb-12 flex justify-center">
+            <div className="pt-6 pb-14 flex justify-center">
               <button
                 type="button"
                 onClick={handleLoadMore}
                 disabled={isLoadingMore}
-                className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-white text-sm font-semibold shadow-xl transition-all cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-2.5 px-8 py-3.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-white/15 hover:border-white/30 text-white text-sm font-black shadow-2xl transition-all cursor-pointer disabled:opacity-50 hover:scale-105"
               >
                 {isLoadingMore ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                    <span>Loading More Titles...</span>
+                    <Loader2 className="w-4 h-4 animate-spin text-fuchsia-400" />
+                    <span>Pulling More Titles...</span>
                   </>
                 ) : (
                   <>
-                    <RefreshCw className="w-4 h-4 text-indigo-400" />
-                    <span>Load More Trending Media</span>
+                    <RefreshCw className="w-4 h-4 text-fuchsia-400" />
+                    <span>Shuffle Next Mix</span>
                   </>
                 )}
               </button>

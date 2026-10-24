@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Film, Tv, Clapperboard, X, LayoutGrid, Layers } from 'lucide-react';
+import { Search, Film, Tv, Sparkles, X, LayoutGrid, Layers } from 'lucide-react';
 import type { MediaTypeFilter } from '../../types';
 
 interface FilterBarProps {
@@ -21,31 +21,31 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onViewModeChange,
   totalFilteredCount,
 }) => {
-  const filterOptions: { id: MediaTypeFilter; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'all', label: 'Both', icon: Clapperboard },
-    { id: 'movie', label: 'Movies', icon: Film },
-    { id: 'tv', label: 'TV Shows', icon: Tv },
+  const filterOptions: { id: MediaTypeFilter; label: string; emoji: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'all', label: 'All Mix', emoji: '✨', icon: Sparkles },
+    { id: 'movie', label: 'Movies', emoji: '🎬', icon: Film },
+    { id: 'tv', label: 'Series', emoji: '📺', icon: Tv },
   ];
 
   return (
-    <div className="w-full bg-slate-900/70 border border-slate-800/80 rounded-2xl p-3 sm:p-4 backdrop-blur-md shadow-xl flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="w-full bg-slate-900/60 border border-white/10 rounded-3xl p-3 sm:p-4 backdrop-blur-2xl shadow-xl flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       {/* Search Input */}
       <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search by title, actor, or genre..."
-          className="w-full pl-10 pr-9 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+          placeholder="Search by title, director, or vibe..."
+          className="w-full pl-11 pr-10 py-2.5 bg-slate-950/80 border border-white/10 rounded-2xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
         />
         {searchQuery && (
           <button
             type="button"
             onClick={() => onSearchChange('')}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
@@ -53,9 +53,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       {/* Controls Container */}
       <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5">
         {/* MediaType Filter Toggle */}
-        <div className="inline-flex p-1 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div className="inline-flex p-1 bg-slate-950/80 border border-white/10 rounded-2xl">
           {filterOptions.map((opt) => {
-            const Icon = opt.icon;
             const isActive = filter === opt.id;
             return (
               <button
@@ -63,15 +62,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 type="button"
                 onClick={() => onFilterChange(opt.id)}
                 className={`
-                  flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer
+                  flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer
                   ${
                     isActive
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                      ? 'bg-gradient-to-r from-indigo-500 to-fuchsia-600 text-white shadow-lg shadow-indigo-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }
                 `}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <span>{opt.emoji}</span>
                 <span>{opt.label}</span>
               </button>
             );
@@ -79,17 +78,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* View Mode Switcher (Grid vs Focus) */}
-        <div className="inline-flex p-1 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div className="inline-flex p-1 bg-slate-950/80 border border-white/10 rounded-2xl">
           <button
             type="button"
             onClick={() => onViewModeChange('grid')}
             title="Grid View"
             className={`
-              p-1.5 rounded-lg transition-all cursor-pointer
+              p-2 rounded-xl transition-all cursor-pointer
               ${
                 viewMode === 'grid'
-                  ? 'bg-slate-800 text-indigo-400 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  ? 'bg-white/10 text-indigo-400 shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }
             `}
           >
@@ -98,13 +97,13 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <button
             type="button"
             onClick={() => onViewModeChange('focus')}
-            title="Focus Deck View"
+            title="Focus Deck Mode"
             className={`
-              p-1.5 rounded-lg transition-all cursor-pointer
+              p-2 rounded-xl transition-all cursor-pointer
               ${
                 viewMode === 'focus'
-                  ? 'bg-slate-800 text-indigo-400 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  ? 'bg-white/10 text-fuchsia-400 shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }
             `}
           >
@@ -113,8 +112,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {typeof totalFilteredCount === 'number' && (
-          <span className="hidden lg:inline text-xs font-medium text-slate-400 bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-slate-700/50">
-            {totalFilteredCount} titles
+          <span className="hidden lg:inline text-xs font-bold text-slate-400 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+            {totalFilteredCount} in queue
           </span>
         )}
       </div>
