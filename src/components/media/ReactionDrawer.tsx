@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Trash2, Film, Tv, BookmarkCheck } from 'lucide-react';
+import { X, Trash2, Film, Tv, BookmarkCheck, LogOut, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { REACTION_CONFIG } from './ReactionButtons';
 import type { ReactionType } from '../../types';
@@ -11,7 +11,7 @@ interface ReactionDrawerProps {
 }
 
 export const ReactionDrawer: React.FC<ReactionDrawerProps> = ({ isOpen, onClose }) => {
-  const { reactions, removeReaction } = useAuth();
+  const { currentUser, reactions, removeReaction, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<ReactionType | 'all'>('all');
 
   if (!isOpen) return null;
@@ -152,6 +152,35 @@ export const ReactionDrawer: React.FC<ReactionDrawerProps> = ({ isOpen, onClose 
               );
             })
           )}
+        </div>
+
+        {/* Drawer Footer with Mobile-Friendly Sign Out */}
+        <div className="p-4 border-t border-white/10 bg-slate-950/80 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {currentUser?.photoURL ? (
+              <img src={currentUser.photoURL} alt="User" className="w-8 h-8 rounded-full shrink-0 object-cover ring-1 ring-white/20" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-slate-800 shrink-0 flex items-center justify-center text-slate-400">
+                <UserIcon className="w-4 h-4" />
+              </div>
+            )}
+            <div className="min-w-0 truncate">
+              <p className="text-xs font-bold text-white truncate">{currentUser?.displayName || 'User'}</p>
+              <p className="text-[10px] text-slate-400 truncate">{currentUser?.email}</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              signOut();
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-bold transition-all cursor-pointer shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </div>
     </div>

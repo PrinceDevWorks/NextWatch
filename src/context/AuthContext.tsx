@@ -94,16 +94,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setReactions(localReactions);
       }
 
-      // Live Firestore sync across devices (Cloud Firestore is source of truth)
+      // Live Firestore sync across devices
       const [remoteProfile, remoteReactions] = await Promise.all([
         getUserProfile(user.uid),
         getUserReactions(user.uid),
       ]);
 
-      if (remoteProfile) {
+      // Profile Sync & Automatic Cloud Migration:
+      if (remoteProfile && remoteProfile.onboardingCompleted) {
         setUserProfile(remoteProfile);
         localStorage.setItem(`nextwatch_profile_${user.uid}`, JSON.stringify(remoteProfile));
-      } else if (!localProfile) {
+      } else if (localProfile && localProfile.onboardingCompleted && localProfile.top5.length > 0) {
+        // Automatic Cloud Migration: User completed onboarding locally on PC before Firestore was created!
+        // Upload it directly to Cloud Firestore so their phone and other PCs immediately get it!
+        setUserProfile(localProfile);
+        saveUserTop5(user.uid, user.email, localProfile.top5, {
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+        }).catch((err) => console.warn('Cloud migration for top 5 failed:', err));
+      } else {
         // Brand new account on all devices
         setUserProfile({
           uid: user.uid,
@@ -115,10 +124,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
 
-      if (remoteReactions && Object.keys(remoteReactions).length > 0) {
-        const merged = { ...localReactions, ...remoteReactions };
-        setReactions(merged);
-        localStorage.setItem(`nextwatch_reactions_${user.uid}`, JSON.stringify(merged));
+      // Reactions Sync & Automatic Cloud Migration:
+      const mergedReactions: Record<number, UserReaction> = {
+        ...localReactions,
+        ...(remoteReactions || {}),
+      };
+
+      setReactions(mergedReactions);
+      localStorage.setItem(`nextwatch_reactions_${user.uid}`, JSON.stringify(mergedReactions));
+
+      // If local storage has reactions that Cloud Firestore doesn't have yet, upload them now!
+      if (localReactions && Object.keys(localReactions).length > 0) {
+        Object.values(localReactions).forEach((r) => {
+          if (!remoteReactions || !remoteReactions[r.tmdbId]) {
+            saveUserReaction(user.uid, r.tmdbId, r.mediaType, r.reaction, {
+              title: r.title,
+              poster_path: r.poster_path,
+              genre_ids: r.genre_ids,
+              rating: r.rating,
+            }).catch((e) => console.warn('Cloud migration for reaction failed:', e));
+          }
+        });
       }
     } catch (err) {
       console.warn('Error syncing user data across devices:', err);
